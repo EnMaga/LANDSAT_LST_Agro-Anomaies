@@ -1,12 +1,46 @@
 import matplotlib.pyplot as plt
 import seaborn as sns
 import pandas as pd
+import statsmodels as sm
+from sklearn.preprocessing import StandardScaler
+
+scaler = StandardScaler()
+
+data = pd.read_csv(r"Path where the CSV file is stored\Sub_Fert_table.csv")
+
+# Filter data for May and June
+data_may_june = data[(data['Month'] == 5) | (data['Month'] == 6)]
+
+# We need to convert 'Aspect_face' and 'Area' to numerical values using one-hot encoding
+data_may_june_encoded = pd.get_dummies(data_may_june, columns=['Aspect_face', 'Area'])
+
+# Group by 'Variety' and 'Month' to get the mean values
+monthly_means_encoded = data_may_june_encoded.groupby(['Variety', 'Month']).mean().reset_index()
+
+# Normalize the relevant columns
+columns_to_normalize = ['Temperature', 'Altitude', 'Potential_Fert']
+monthly_means_encoded[columns_to_normalize] = scaler.fit_transform(monthly_means_encoded[columns_to_normalize])
+
+# Prepare the data for regression with selected variables
+X_vars = ['Temperature', 'Altitude'] + [col for col in monthly_means_encoded.columns if col.startswith('Aspect_face_') or col.startswith('Area_')]
+X_selected = monthly_means_encoded[X_vars]
+y_selected = monthly_means_encoded['Potential_Fert']
+
+# Add a constant to the model (intercept)
+X_selected = sm.add_constant(X_selected)
+
+# Fit the multiple linear regression model
+model_selected = sm.OLS(y_selected, X_selected).fit()
+
+# Display the summary of the multiple linear regression model
+model_selected_summary = model_selected.summary()
+model_selected_summary
+
 
 #################################################
 ## Example plot for Temperature and Blind Buds ##
 #################################################
 
-data = pd.read_csv(r"Path where the CSV file is stored\Sub_Fert_table.csv")
 
 # Prepare the data
 data['Date'] = pd.to_datetime(data['Date'], format='%d/%m/%y')
@@ -53,7 +87,7 @@ plt.show()
 
 # Encode 'Aspect_face' and 'Area' as numerical values for correlation calculation
 data_may_june['Aspect_Encoded'] = data_may_june['Aspect_face'].astype('category').cat.codes
-data_may_june['Area_Encoded'] = data_may_june['Area'].map(area_mapping)
+data_may_june['Area_Encoded'] = data_may_june['Area'].astype('category').cat.codes
 
 # Select relevant columns for correlation analysis
 correlation_columns = ['Potential_Fert', 'Temperature', 'Area_Encoded', 'Aspect_Encoded', 'Altitude']
