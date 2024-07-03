@@ -6,7 +6,7 @@ from sklearn.preprocessing import StandardScaler
 
 scaler = StandardScaler()
 
-data = pd.read_csv(r"Path where the CSV file is stored\Sub_Fert_table.csv")
+data = pd.read_csv(r"Path where the CSV file is stored\DummyData.csv")
 
 # Filter data for May and June
 data_may_june = data[(data['Month'] == 5) | (data['Month'] == 6)]
