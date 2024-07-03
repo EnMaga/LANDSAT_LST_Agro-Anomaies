@@ -6,7 +6,7 @@ import pandas as pd
 ## Plot correlation matrix ##
 #############################
 
-wine_data = pd.read_csv(r"Path where the CSV file is stored\Wine_Estates_DF_Month.csv")
+wine_data = pd.read_csv(r"Path where the CSV file is stored\DummyData.csv")
 
 # Calculate seasonal temperature standard deviation
 wine_data['Season'] = wine_data['Month'].map({
