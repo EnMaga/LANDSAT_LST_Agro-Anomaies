@@ -2,7 +2,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import pandas as pd
 
-data = pd.read_csv(r"Path where the CSV file is stored\Wine_Estates_DF_Month.csv")
+data = pd.read_csv(r"Path where the CSV file is stored\DummyData.csv")
 
 #######################
 ## Explorative plots ##
