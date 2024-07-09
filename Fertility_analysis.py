@@ -3,127 +3,77 @@ import seaborn as sns
 import pandas as pd
 import statsmodels as sm
 from sklearn.preprocessing import StandardScaler
+from scipy.stats import linregress
 
 scaler = StandardScaler()
 
-data = pd.read_csv(r"Path where the CSV file is stored\DummyData.csv")
+anomalies_df = pd.read_csv(r"Path where the CSV file is stored\DummyData.csv")
+buds_fert_df = pd.read_csv(r"Path where the CSV file is stored\DummyData2.csv")
 
-# Filter data for May and June
-data_may_june = data[(data['Month'] == 5) | (data['Month'] == 6)]
+# Merging the dataframes on common columns (fid, Area, ID, Varieté, Azienda, LatN, LongE)
+merged_df = pd.merge(anomalies_df, buds_fert_df[['fid', 'Year', 'Potential_Fert', 'n_Blind_Buds', 'n_Steril_Buds']], 
+                     on=['fid', 'Year'], how='left')
 
-# We need to convert 'Aspect_face' and 'Area' to numerical values using one-hot encoding
-data_may_june_encoded = pd.get_dummies(data_may_june, columns=['Aspect_face', 'Area'])
+# Create a column for previous year temperature
+merged_df['Previous_Year'] = merged_df['Year'] - 1
+previous_year_temp = merged_df[['fid', 'ID', 'Year', 'Temperature']].rename(columns={'Year': 'Previous_Year', 'Temperature': 'Previous_Temperature'})
 
-# Group by 'Variety' and 'Month' to get the mean values
-monthly_means_encoded = data_may_june_encoded.groupby(['Variety', 'Month']).mean().reset_index()
+# Merge the previous year temperature back to the original dataframe
+final_df = pd.merge(merged_df, previous_year_temp, on=['fid', 'ID', 'Previous_Year'], how='left')
 
-# Normalize the relevant columns
-columns_to_normalize = ['Temperature', 'Altitude', 'Potential_Fert']
-monthly_means_encoded[columns_to_normalize] = scaler.fit_transform(monthly_means_encoded[columns_to_normalize])
+# Display the final dataframe
+import ace_tools as tools; tools.display_dataframe_to_user(name="Final DataFrame with Added Columns", dataframe=final_df)
 
-# Prepare the data for regression with selected variables
-X_vars = ['Temperature', 'Altitude'] + [col for col in monthly_means_encoded.columns if col.startswith('Aspect_face_') or col.startswith('Area_')]
-X_selected = monthly_means_encoded[X_vars]
-y_selected = monthly_means_encoded['Potential_Fert']
+# Show the first few rows of the final dataframe
+final_df.head()
 
-# Add a constant to the model (intercept)
-X_selected = sm.add_constant(X_selected)
+# Remove rows with Year 2017
+final_df = final_df[final_df['Year'] != 2017]
 
-# Fit the multiple linear regression model
-model_selected = sm.OLS(y_selected, X_selected).fit()
+# Filter the data to include only relevant months for the previous year's temperature
+months = [5, 6, 7, 8]
+filtered_df = final_df[final_df['Month'].isin(months)]
 
-# Display the summary of the multiple linear regression model
-model_selected_summary = model_selected.summary()
-model_selected_summary
+# Group by fid, ID, Varieté, Azienda, Year and calculate the average temperature for the specified months
+avg_temp_df = filtered_df.groupby(['fid', 'ID', 'Variet', 'Azienda', 'Year'])['Previous_Temperature'].mean().reset_index()
 
+# Merge this average temperature back with the final_df
+merged_avg_temp_df = pd.merge(final_df, avg_temp_df, on=['fid', 'ID', 'Variet', 'Azienda', 'Year'], suffixes=('', '_avg_05060708'))
 
-#################################################
-## Example plot for Temperature and Blind Buds ##
-#################################################
+# Remove rows with NaN values in the relevant columns
+cleaned_df = merged_avg_temp_df.dropna(subset=['Potential_Fert', 'Previous_Temperature_avg_05060708'])
 
-
-# Prepare the data
-data['Date'] = pd.to_datetime(data['Date'], format='%d/%m/%y')
-areas = data['Area'].unique()
-varieties = data['Variety'].unique()
-
-# Create a line plot with two y-axes: temperature and number of blind buds by area, with solid vertical lines connected to the temperature axis
-fig, axes = plt.subplots(nrows=2, ncols=2, figsize=(14, 10), sharex=True, sharey=False)
-
-for i, area in enumerate(areas):
-    ax1 = axes.flat[i]
-    ax2 = ax1.twinx()  # Create a second y-axis
-    
-    # Plot overall temperature trend for each area
-    subset_temp = data[data['Area'] == area]
-    sns.lineplot(data=subset_temp, x='Date', y='Temperature', ax=ax1, color='blue', alpha=0.7)
-    
-    # Plot number of blind buds trend for each variety within the area
-    for variety in varieties:
-        subset_buds = data[(data['Area'] == area) & (data['Variety'] == variety)]
-        if not subset_buds.empty:
-            sns.lineplot(data=subset_buds, x='Date', y='n_Blind_Buds', ax=ax2, linestyle='dashed', alpha=0.7)
-    
-    # Add solid vertical lines for May and June for each year, connected to the temperature axis
-    years = subset_temp['Date'].dt.year.unique()
-    for year in years:
-        ax1.axvline(pd.to_datetime(f'{year}-05-01'), color='grey', linestyle='-', linewidth=1)
-        ax1.axvline(pd.to_datetime(f'{year}-06-01'), color='grey', linestyle='-', linewidth=1)
-    
-    ax1.set_ylabel('Temperature', color='blue')
-    ax2.set_ylabel('Number of Blind Buds', color='green')
-    ax1.set_title(f'Area: {area}')
-    ax1.tick_params(axis='x', rotation=45)
-
-fig.tight_layout()
-fig.suptitle('Temperature and Number of Blind Buds Trends by Area', y=1.02)
-plt.show()
-
-###############################################################################
-## Example plot for Temperature and Blind Buds correlation matrix and trends ##
-###############################################################################
-
-#The DF "data_may_june" needs do be created filtering only for those months
-
-# Encode 'Aspect_face' and 'Area' as numerical values for correlation calculation
-data_may_june['Aspect_Encoded'] = data_may_june['Aspect_face'].astype('category').cat.codes
-data_may_june['Area_Encoded'] = data_may_june['Area'].astype('category').cat.codes
-
-# Select relevant columns for correlation analysis
-correlation_columns = ['Potential_Fert', 'Temperature', 'Area_Encoded', 'Aspect_Encoded', 'Altitude']
-
-# Calculate the correlation matrix
-correlation_matrix = data_may_june[correlation_columns].corr()
-
-# Display the correlation matrix
+# Plotting the correlation
+sns.set(style="whitegrid")
 plt.figure(figsize=(12, 8))
-sns.heatmap(correlation_matrix, annot=True, cmap='coolwarm', fmt=".2f")
-plt.title('Correlation Matrix of Potential Fertility, Temperature, Area, Aspect, Altitude')
-plt.show()
 
-# Display the correlation matrix as a dataframe for detailed inspection
-correlation_matrix
+# Loop through each variety to create separate plots with trendlines
+for variety in cleaned_df['Variet'].unique():
+    subset = cleaned_df[cleaned_df['Variet'] == variety]
+    sns.regplot(x='Previous_Temperature_avg_05060708', y='Potential_Fert', data=subset, label=variety)
 
-
-# Remove '_Encoded' terms and rename the columns for better readability
-correlation_matrix.columns = ['Potential Fertility', 'Temperature', 'Area', 'Aspect', 'Altitude']
-correlation_matrix.index = ['Potential Fertility', 'Temperature', 'Area', 'Aspect', 'Altitude']
-
-# Display the updated correlation matrix
-plt.figure(figsize=(12, 8))
-sns.heatmap(correlation_matrix, annot=True, cmap='coolwarm', fmt=".2f")
-plt.title('Correlation Matrix of Potential Fertility, Temperature, Area, Aspect, Altitude')
-plt.show()
-
-# Display the correlation matrix as a dataframe for detailed inspection
-correlation_matrix
-
-
-# Scatter plot of Temperature vs Potential Fertility with regression lines for each Variety
-plt.figure(figsize=(12, 8))
-sns.lmplot(x='Temperature', y='Potential_Fert', hue='Variety', data=data_may_june, aspect=1.5, markers=["o", "s", "D", "^", "v"], legend_out=False)
-plt.title('Temperature vs Potential Fertility per Variety')
-plt.xlabel('Temperature')
+plt.title('Correlation of Potential Fertility with Previous Year\'s Average Temperature (May-Aug) by Variety')
+plt.xlabel('Previous Year\'s Average Temperature (May-Aug)')
 plt.ylabel('Potential Fertility')
 plt.legend(title='Variety')
 plt.show()
+
+# Prepare a table to store the results
+results = []
+
+# Loop through each variety and calculate the correlation coefficient and significance
+for variety in cleaned_df['Variet'].unique():
+    subset = cleaned_df[cleaned_df['Variet'] == variety]
+    slope, intercept, r_value, p_value, std_err = linregress(subset['Previous_Temperature_avg_05060708'], subset['Potential_Fert'])
+    results.append({
+        'Variety': variety,
+        'Correlation Coefficient (r)': r_value,
+        'P-value': p_value
+    })
+
+# Create a DataFrame for the results
+results_df = pd.DataFrame(results)
+import ace_tools as tools; tools.display_dataframe_to_user(name="Correlation and Significance Results", dataframe=results_df)
+
+# Display the results table
+results_df
