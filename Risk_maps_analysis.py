@@ -9,8 +9,8 @@ from rasterio.features import geometry_mask
 from shapely.geometry import Point
 import pandas as pd
 
-# Load TIFF files
-directory = "/Users/enricomagazzino/Downloads/Spring_LSTs"
+# Load TIFF filesfrom folder
+directory = ".../Spring_LSTs"
 
 file_paths = [os.path.join(directory, file) for file in os.listdir(directory) if file.endswith('.tif')]
 
