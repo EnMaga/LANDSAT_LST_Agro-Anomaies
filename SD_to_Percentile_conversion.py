@@ -2,7 +2,7 @@ import gdal
 import numpy as np
 from osgeo import gdal_array
 
-rasterfile = r"Path where the CSV file is stored\DummyData.csv" 
+rasterfile = r"Path where the CSV file is stored\file.tif" 
 
 percentiles = [0,25,50,75,100] 
 
