@@ -1,3 +1,5 @@
+#Use PyQGIS to convert your raster to numpy Array then find percentiles with numpy.percentile():
+
 import gdal
 import numpy as np
 from osgeo import gdal_array
